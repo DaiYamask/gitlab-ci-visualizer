@@ -76,11 +76,12 @@ jobs:
       - name: Build
         run: make build
 
-      - name: Upload Linux build artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: gitlabviz-linux
-          path: bin/gitlabviz
+      # Skip artifact upload for now
+      # - name: Upload Linux build artifact
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: gitlabviz-linux
+      #     path: bin/gitlabviz
 
   build-all:
     name: Build All Platforms
@@ -98,8 +99,9 @@ jobs:
       - name: Build all platforms
         run: make build-all
 
-      - name: Upload all build artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: gitlabviz-all-platforms
-          path: bin/
+      # Skip artifact upload for now
+      # - name: Upload all build artifacts
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: gitlabviz-all-platforms
+      #     path: bin/
