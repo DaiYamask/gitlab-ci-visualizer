@@ -1,52 +1,54 @@
 package visualizer
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
 	"github.com/fatih/color"
+	"gopkg.in/yaml.v3"
+)
+
+type OutputFormat string
+
+const (
+	FormatText  OutputFormat = "text"
+	FormatJSON  OutputFormat = "json"
+	FormatYAML  OutputFormat = "yaml"
+	FormatTable OutputFormat = "table"
 )
 
 type Options struct {
-	StageFilter string // Filter jobs by stage
-	RuleFilter  string // Filter jobs by rule condition
+	StageFilter string       // Filter jobs by stage
+	RuleFilter  string       // Filter jobs by rule condition
+	Format      OutputFormat // Output format (text, json, yaml, table)
+}
+
+type PipelineOutput struct {
+	Name         string                 `json:"name" yaml:"name"`
+	Stages       []string               `json:"stages" yaml:"stages"`
+	WorkflowRules []map[string]string   `json:"workflow_rules,omitempty" yaml:"workflow_rules,omitempty"`
+	JobsByRule   map[string][]JobOutput `json:"jobs_by_rule" yaml:"jobs_by_rule"`
+	Filters      map[string]string      `json:"filters,omitempty" yaml:"filters,omitempty"`
+}
+
+type JobOutput struct {
+	Name  string      `json:"name" yaml:"name"`
+	Stage string      `json:"stage" yaml:"stage"`
+	Rules []RuleOutput `json:"rules,omitempty" yaml:"rules,omitempty"`
+}
+
+type RuleOutput struct {
+	If      string   `json:"if,omitempty" yaml:"if,omitempty"`
+	When    string   `json:"when,omitempty" yaml:"when,omitempty"`
+	Changes []string `json:"changes,omitempty" yaml:"changes,omitempty"`
 }
 
 func Visualize(pipeline *parser.Pipeline, opts Options) {
-	titleColor := color.New(color.FgHiWhite, color.Bold)
-	sectionColor := color.New(color.FgYellow, color.Bold)
-	
-	titleColor.Println("GitLab CI Pipeline Visualization")
-	titleColor.Println("===============================")
-
-	sectionColor.Println("\nStages:")
-	for i, stage := range pipeline.Stages {
-		fmt.Printf("  %d. %s\n", i+1, stage)
-	}
-
-	if workflow, ok := pipeline.Workflow["rules"]; ok {
-		if rules, ok := workflow.([]interface{}); ok && len(rules) > 0 {
-			sectionColor.Println("\nWorkflow Rules:")
-			for i, rule := range rules {
-				if ruleMap, ok := rule.(map[string]interface{}); ok {
-					fmt.Printf("  %d. ", i+1)
-					parts := []string{}
-					
-					if ifCond, ok := ruleMap["if"].(string); ok {
-						parts = append(parts, fmt.Sprintf("if: %s", color.GreenString(ifCond)))
-					}
-					if when, ok := ruleMap["when"].(string); ok {
-						parts = append(parts, fmt.Sprintf("when: %s", color.MagentaString(when)))
-					}
-					
-					fmt.Println(strings.Join(parts, ", "))
-				}
-			}
-		}
-	}
-
 	filteredJobs := make(map[string]*parser.Job)
 	for name, job := range pipeline.Jobs {
 		if opts.StageFilter != "" && job.Stage != opts.StageFilter {
@@ -54,9 +56,8 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 		}
 		filteredJobs[name] = job
 	}
-
-	sectionColor.Println("\nJobs by Rules:")
 	
+	// Group jobs by rule condition
 	jobsByCondition := make(map[string]map[string]bool) // condition -> job name -> exists
 	jobsWithoutRules := []*parser.Job{}
 	
@@ -83,21 +84,13 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 		}
 	}
 	
-	if len(jobsWithoutRules) > 0 && opts.RuleFilter == "" {
-		fmt.Println("\n  " + color.HiCyanString("Always Run (No Rules):"))
-		
-		sort.Slice(jobsWithoutRules, func(i, j int) bool {
-			if jobsWithoutRules[i].Stage != jobsWithoutRules[j].Stage {
-				return getStageIndex(pipeline.Stages, jobsWithoutRules[i].Stage) < 
-				       getStageIndex(pipeline.Stages, jobsWithoutRules[j].Stage)
-			}
-			return jobsWithoutRules[i].Name < jobsWithoutRules[j].Name
-		})
-		
-		for _, job := range jobsWithoutRules {
-			printJob(job)
+	sort.Slice(jobsWithoutRules, func(i, j int) bool {
+		if jobsWithoutRules[i].Stage != jobsWithoutRules[j].Stage {
+			return getStageIndex(pipeline.Stages, jobsWithoutRules[i].Stage) < 
+				   getStageIndex(pipeline.Stages, jobsWithoutRules[j].Stage)
 		}
-	}
+		return jobsWithoutRules[i].Name < jobsWithoutRules[j].Name
+	})
 	
 	var conditions []string
 	for condition := range jobsByCondition {
@@ -105,6 +98,8 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 	}
 	sort.Strings(conditions)
 	
+	// Prepare jobs by condition
+	jobsByConditionSorted := make(map[string][]*parser.Job)
 	for _, condition := range conditions {
 		jobNames := jobsByCondition[condition]
 		
@@ -118,30 +113,246 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 		sort.Slice(jobs, func(i, j int) bool {
 			if jobs[i].Stage != jobs[j].Stage {
 				return getStageIndex(pipeline.Stages, jobs[i].Stage) < 
-				       getStageIndex(pipeline.Stages, jobs[j].Stage)
+					   getStageIndex(pipeline.Stages, jobs[j].Stage)
 			}
 			return jobs[i].Name < jobs[j].Name
 		})
 		
+		jobsByConditionSorted[condition] = jobs
+	}
+	
+	var workflowRules []map[string]string
+	if workflow, ok := pipeline.Workflow["rules"]; ok {
+		if rules, ok := workflow.([]interface{}); ok && len(rules) > 0 {
+			for _, rule := range rules {
+				if ruleMap, ok := rule.(map[string]interface{}); ok {
+					r := make(map[string]string)
+					
+					if ifCond, ok := ruleMap["if"].(string); ok {
+						r["if"] = ifCond
+					}
+					if when, ok := ruleMap["when"].(string); ok {
+						r["when"] = when
+					}
+					
+					workflowRules = append(workflowRules, r)
+				}
+			}
+		}
+	}
+	
+	filters := make(map[string]string)
+	if opts.StageFilter != "" {
+		filters["stage"] = opts.StageFilter
+	}
+	if opts.RuleFilter != "" {
+		filters["rule"] = opts.RuleFilter
+	}
+	
+	switch opts.Format {
+	case FormatJSON:
+		outputJSON(pipeline, workflowRules, jobsWithoutRules, jobsByConditionSorted, filters)
+	case FormatYAML:
+		outputYAML(pipeline, workflowRules, jobsWithoutRules, jobsByConditionSorted, filters)
+	case FormatTable:
+		outputTable(pipeline, workflowRules, jobsWithoutRules, jobsByConditionSorted, filters)
+	default:
+		outputText(pipeline, workflowRules, jobsWithoutRules, jobsByConditionSorted, filters)
+	}
+}
+
+// getStageIndex returns the index of a stage in the stages slice
+// If the stage is not found, it returns a large number to put it at the end
+func outputJSON(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
+	output := buildPipelineOutput(pipeline, workflowRules, jobsWithoutRules, jobsByCondition, filters)
+	
+	jsonData, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Printf("Error generating JSON: %v\n", err)
+		return
+	}
+	
+	fmt.Println(string(jsonData))
+}
+
+func outputYAML(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
+	output := buildPipelineOutput(pipeline, workflowRules, jobsWithoutRules, jobsByCondition, filters)
+	
+	yamlData, err := yaml.Marshal(output)
+	if err != nil {
+		fmt.Printf("Error generating YAML: %v\n", err)
+		return
+	}
+	
+	fmt.Println(string(yamlData))
+}
+
+func outputTable(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	
+	fmt.Fprintln(w, "JOB NAME\tSTAGE\tRULE CONDITION\tWHEN")
+	fmt.Fprintln(w, "--------\t-----\t--------------\t----")
+	
+	for _, job := range jobsWithoutRules {
+		stage := job.Stage
+		if stage == "" {
+			stage = "test"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, "No Rules", "always")
+	}
+	
+	for condition, jobs := range jobsByCondition {
+		for _, job := range jobs {
+			stage := job.Stage
+			if stage == "" {
+				stage = "test"
+			}
+			
+			when := "always"
+			if len(job.Rules) > 0 && job.Rules[0].When != "" {
+				when = job.Rules[0].When
+			}
+			
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, condition, when)
+		}
+	}
+	
+	w.Flush()
+	
+	if len(workflowRules) > 0 {
+		fmt.Println("\nWORKFLOW RULES:")
+		fmt.Println("-------------")
+		for i, rule := range workflowRules {
+			parts := []string{}
+			if ifCond, ok := rule["if"]; ok {
+				parts = append(parts, fmt.Sprintf("if: %s", ifCond))
+			}
+			if when, ok := rule["when"]; ok {
+				parts = append(parts, fmt.Sprintf("when: %s", when))
+			}
+			fmt.Printf("%d. %s\n", i+1, strings.Join(parts, ", "))
+		}
+	}
+	
+	if len(filters) > 0 {
+		fmt.Println("\nFILTERS APPLIED:")
+		fmt.Println("---------------")
+		for k, v := range filters {
+			fmt.Printf("%s: %s\n", k, v)
+		}
+	}
+}
+
+func outputText(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
+	titleColor := color.New(color.FgHiWhite, color.Bold)
+	sectionColor := color.New(color.FgYellow, color.Bold)
+	
+	titleColor.Println("GitLab CI Pipeline Visualization")
+	titleColor.Println("===============================")
+
+	sectionColor.Println("\nStages:")
+	for i, stage := range pipeline.Stages {
+		fmt.Printf("  %d. %s\n", i+1, stage)
+	}
+
+	if len(workflowRules) > 0 {
+		sectionColor.Println("\nWorkflow Rules:")
+		for i, rule := range workflowRules {
+			fmt.Printf("  %d. ", i+1)
+			parts := []string{}
+			
+			if ifCond, ok := rule["if"]; ok {
+				parts = append(parts, fmt.Sprintf("if: %s", color.GreenString(ifCond)))
+			}
+			if when, ok := rule["when"]; ok {
+				parts = append(parts, fmt.Sprintf("when: %s", color.MagentaString(when)))
+			}
+			
+			fmt.Println(strings.Join(parts, ", "))
+		}
+	}
+
+	sectionColor.Println("\nJobs by Rules:")
+	
+	if len(jobsWithoutRules) > 0 && filters["rule"] == "" {
+		fmt.Println("\n  " + color.HiCyanString("Always Run (No Rules):"))
+		for _, job := range jobsWithoutRules {
+			printJob(job)
+		}
+	}
+	
+	for condition, jobs := range jobsByCondition {
 		fmt.Printf("\n  Rule Condition: %s\n", color.GreenString(condition))
 		for _, job := range jobs {
 			printJob(job)
 		}
 	}
 	
-	if opts.StageFilter != "" || opts.RuleFilter != "" {
+	if len(filters) > 0 {
 		fmt.Println("\nFilters applied:")
-		if opts.StageFilter != "" {
-			fmt.Printf("  Stage: %s\n", color.YellowString(opts.StageFilter))
+		if stageFilter, ok := filters["stage"]; ok {
+			fmt.Printf("  Stage: %s\n", color.YellowString(stageFilter))
 		}
-		if opts.RuleFilter != "" {
-			fmt.Printf("  Rule: %s\n", color.YellowString(opts.RuleFilter))
+		if ruleFilter, ok := filters["rule"]; ok {
+			fmt.Printf("  Rule: %s\n", color.YellowString(ruleFilter))
 		}
 	}
 }
 
-// getStageIndex returns the index of a stage in the stages slice
-// If the stage is not found, it returns a large number to put it at the end
+func buildPipelineOutput(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) PipelineOutput {
+	output := PipelineOutput{
+		Name:         "GitLab CI Pipeline",
+		Stages:       pipeline.Stages,
+		WorkflowRules: workflowRules,
+		JobsByRule:   make(map[string][]JobOutput),
+		Filters:      filters,
+	}
+	
+	if len(jobsWithoutRules) > 0 {
+		noRuleJobs := []JobOutput{}
+		for _, job := range jobsWithoutRules {
+			jobOutput := convertJobToOutput(job)
+			noRuleJobs = append(noRuleJobs, jobOutput)
+		}
+		output.JobsByRule["No Rules"] = noRuleJobs
+	}
+	
+	for condition, jobs := range jobsByCondition {
+		conditionJobs := []JobOutput{}
+		for _, job := range jobs {
+			jobOutput := convertJobToOutput(job)
+			conditionJobs = append(conditionJobs, jobOutput)
+		}
+		output.JobsByRule[condition] = conditionJobs
+	}
+	
+	return output
+}
+
+func convertJobToOutput(job *parser.Job) JobOutput {
+	stage := job.Stage
+	if stage == "" {
+		stage = "test" // Default stage in GitLab CI
+	}
+	
+	jobOutput := JobOutput{
+		Name:  job.Name,
+		Stage: stage,
+		Rules: []RuleOutput{},
+	}
+	
+	for _, rule := range job.Rules {
+		ruleOutput := RuleOutput{
+			If:      rule.If,
+			When:    rule.When,
+			Changes: rule.Changes,
+		}
+		jobOutput.Rules = append(jobOutput.Rules, ruleOutput)
+	}
+	
+	return jobOutput
+}
+
 func getStageIndex(stages []string, stage string) int {
 	if stage == "" {
 		stage = "test" // Default stage in GitLab CI

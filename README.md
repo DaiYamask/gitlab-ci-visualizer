@@ -10,6 +10,7 @@ A command-line tool to visualize GitLab CI pipelines, with a focus on showing wh
 - Filter jobs by stage or rule condition
 - Display workflow rules
 - Color-coded output for better readability
+- Multiple output formats (text, JSON, YAML, table)
 
 ## Installation
 
@@ -53,6 +54,11 @@ gitlabviz show --stage test --rule '$CI_COMMIT_TAG' path/to/.gitlab-ci.yml
 
 # Disable colored output
 gitlabviz show --no-color path/to/.gitlab-ci.yml
+
+# Output in different formats
+gitlabviz show --format json path/to/.gitlab-ci.yml
+gitlabviz show --format yaml path/to/.gitlab-ci.yml
+gitlabviz show --format table path/to/.gitlab-ci.yml
 
 # Get help
 gitlabviz --help
