@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
@@ -18,6 +19,8 @@ var (
 	ruleFlag         string
 	formatFlag       string
 	dependenciesFlag bool
+	expandVarsFlag   bool
+	ciVarsFlag       string
 )
 
 func main() {
@@ -74,11 +77,23 @@ Examples:
 				format = visualizer.FormatText
 			}
 			
+			ciVars := make(map[string]string)
+			if ciVarsFlag != "" {
+				for _, pair := range strings.Split(ciVarsFlag, ",") {
+					parts := strings.SplitN(pair, "=", 2)
+					if len(parts) == 2 {
+						ciVars[parts[0]] = parts[1]
+					}
+				}
+			}
+			
 			opts := visualizer.Options{
 				StageFilter:      stageFlag,
 				RuleFilter:       ruleFlag,
 				Format:           format,
 				ShowDependencies: dependenciesFlag,
+				ExpandVars:       expandVarsFlag,
+				CIVars:           ciVars,
 			}
 			
 			visualizer.Visualize(pipeline, opts)
@@ -89,6 +104,8 @@ Examples:
 	showCmd.Flags().StringVar(&ruleFlag, "rule", "", "Filter jobs by rule condition")
 	showCmd.Flags().StringVar(&formatFlag, "format", "text", "Output format (text, json, yaml, table)")
 	showCmd.Flags().BoolVar(&dependenciesFlag, "dependencies", false, "Show job dependencies")
+	showCmd.Flags().BoolVar(&expandVarsFlag, "expand-vars", false, "Expand environment variables in output")
+	showCmd.Flags().StringVar(&ciVarsFlag, "ci-vars", "", "Comma-separated list of CI variable values (e.g. CI_COMMIT_BRANCH=main,CI_PIPELINE_SOURCE=push)")
 
 	rootCmd.AddCommand(showCmd)
 

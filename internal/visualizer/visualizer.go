@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -23,10 +24,12 @@ const (
 )
 
 type Options struct {
-	StageFilter      string       // Filter jobs by stage
-	RuleFilter       string       // Filter jobs by rule condition
-	Format           OutputFormat // Output format (text, json, yaml, table)
-	ShowDependencies bool         // Show job dependencies
+	StageFilter      string            // Filter jobs by stage
+	RuleFilter       string            // Filter jobs by rule condition
+	Format           OutputFormat      // Output format (text, json, yaml, table)
+	ShowDependencies bool              // Show job dependencies
+	ExpandVars       bool              // Expand environment variables
+	CIVars           map[string]string // User-provided values for CI_ variables
 }
 
 type PipelineOutput struct {
@@ -52,6 +55,74 @@ type RuleOutput struct {
 }
 
 func Visualize(pipeline *parser.Pipeline, opts Options) {
+	// If expand-vars is enabled, create a copy of the pipeline with expanded variables
+	if opts.ExpandVars {
+		expandedPipeline := &parser.Pipeline{
+			Jobs:      make(map[string]*parser.Job),
+			Stages:    make([]string, len(pipeline.Stages)),
+			Variables: make(map[string]string),
+			Workflow:  pipeline.Workflow,
+			Default:   pipeline.Default,
+			Includes:  pipeline.Includes,
+		}
+		
+		// Copy stages and variables
+		copy(expandedPipeline.Stages, pipeline.Stages)
+		for k, v := range pipeline.Variables {
+			expandedPipeline.Variables[k] = v
+		}
+		
+		// Copy jobs with expanded variables
+		for name, job := range pipeline.Jobs {
+			expandedJob := &parser.Job{
+				Name:         job.Name,
+				Stage:        job.Stage,
+				Script:       make([]string, len(job.Script)),
+				Rules:        make([]parser.Rule, len(job.Rules)),
+				Only:         job.Only,
+				Except:       job.Except,
+				When:         job.When,
+				AllowFailure: job.AllowFailure,
+				Dependencies: make([]string, len(job.Dependencies)),
+				Needs:        make([]string, len(job.Needs)),
+				Tags:         make([]string, len(job.Tags)),
+			}
+			
+			for i, script := range job.Script {
+				expandedJob.Script[i] = expandVars(script, pipeline, opts.CIVars)
+			}
+			
+			for i, rule := range job.Rules {
+				expandedRule := parser.Rule{
+					If:          expandVars(rule.If, pipeline, opts.CIVars),
+					When:        rule.When,
+					Changes:     make([]string, len(rule.Changes)),
+					Variables:   make(map[string]string),
+					AllowFailure: rule.AllowFailure,
+				}
+				
+				for j, change := range rule.Changes {
+					expandedRule.Changes[j] = expandVars(change, pipeline, opts.CIVars)
+				}
+				
+				// Copy and expand variables
+				for k, v := range rule.Variables {
+					expandedRule.Variables[k] = expandVars(v, pipeline, opts.CIVars)
+				}
+				
+				expandedJob.Rules[i] = expandedRule
+			}
+			
+			copy(expandedJob.Dependencies, job.Dependencies)
+			copy(expandedJob.Needs, job.Needs)
+			copy(expandedJob.Tags, job.Tags)
+			
+			expandedPipeline.Jobs[name] = expandedJob
+		}
+		
+		pipeline = expandedPipeline
+	}
+	
 	filteredJobs := make(map[string]*parser.Job)
 	for name, job := range pipeline.Jobs {
 		if opts.StageFilter != "" && job.Stage != opts.StageFilter {
@@ -153,6 +224,9 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 	}
 	if opts.ShowDependencies {
 		filters["dependencies"] = "true"
+	}
+	if opts.ExpandVars {
+		filters["expand-vars"] = "true"
 	}
 	
 	switch opts.Format {
@@ -281,6 +355,32 @@ func outputTable(pipeline *parser.Pipeline, workflowRules []map[string]string, j
 			fmt.Printf("%s: %s\n", k, v)
 		}
 	}
+	
+	if _, ok := filters["expand-vars"]; ok {
+		fmt.Println("\nNOTE: Environment variables have been expanded.")
+		fmt.Println("CI_ variables without provided values are shown as <VARIABLE_NAME>.")
+	}
+}
+
+func expandVars(s string, pipeline *parser.Pipeline, ciVars map[string]string) string {
+	for name, value := range pipeline.Variables {
+		s = strings.ReplaceAll(s, "$"+name, value)
+		s = strings.ReplaceAll(s, "${"+name+"}", value)
+	}
+	
+	// Then, handle CI_ variables
+	for name, value := range ciVars {
+		s = strings.ReplaceAll(s, "$"+name, value)
+		s = strings.ReplaceAll(s, "${"+name+"}", value)
+	}
+	
+	re := regexp.MustCompile(`\$\{?(CI_[A-Z_]+)\}?`)
+	s = re.ReplaceAllStringFunc(s, func(match string) string {
+		varName := re.FindStringSubmatch(match)[1]
+		return "<" + varName + ">"
+	})
+	
+	return s
 }
 
 func outputText(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
@@ -338,6 +438,9 @@ func outputText(pipeline *parser.Pipeline, workflowRules []map[string]string, jo
 		}
 		if _, ok := filters["dependencies"]; ok {
 			fmt.Printf("  Dependencies: %s\n", color.YellowString("true"))
+		}
+		if _, ok := filters["expand-vars"]; ok {
+			fmt.Printf("  Expand Variables: %s\n", color.YellowString("true"))
 		}
 	}
 }
