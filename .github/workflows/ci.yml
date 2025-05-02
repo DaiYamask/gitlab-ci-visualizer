@@ -60,6 +60,15 @@ jobs:
 
       - name: Test table format
         run: ./bin/gitlabviz show --format table examples/simple.gitlab-ci.yml
+        
+      - name: Test dependencies flag
+        run: ./bin/gitlabviz show --dependencies examples/complex.gitlab-ci.yml
+        
+      - name: Test dependencies with JSON format
+        run: ./bin/gitlabviz show --dependencies --format json examples/complex.gitlab-ci.yml
+        
+      - name: Test dependencies with table format
+        run: ./bin/gitlabviz show --dependencies --format table examples/complex.gitlab-ci.yml
 
   build:
     name: Build
