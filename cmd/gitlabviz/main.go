@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/devin/gitlab-ci-visualizer/internal/parser"
-	"github.com/devin/gitlab-ci-visualizer/internal/visualizer"
+	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
+	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )

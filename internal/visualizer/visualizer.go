@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/devin/gitlab-ci-visualizer/internal/parser"
+	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
 	"github.com/fatih/color"
 )
 
