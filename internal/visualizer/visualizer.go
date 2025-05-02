@@ -336,6 +336,9 @@ func outputText(pipeline *parser.Pipeline, workflowRules []map[string]string, jo
 		if ruleFilter, ok := filters["rule"]; ok {
 			fmt.Printf("  Rule: %s\n", color.YellowString(ruleFilter))
 		}
+		if _, ok := filters["dependencies"]; ok {
+			fmt.Printf("  Dependencies: %s\n", color.YellowString("true"))
+		}
 	}
 }
 
