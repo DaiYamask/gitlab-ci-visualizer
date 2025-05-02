@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.18'
+          cache: true
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+          $(go env GOPATH)/bin/golangci-lint --version
+
+      - name: Lint
+        run: $(go env GOPATH)/bin/golangci-lint run ./...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.18'
+          cache: true
+
+      - name: Run unit tests
+        run: go test -v ./...
+
+      - name: Build for testing examples
+        run: go build -o bin/gitlabviz ./cmd/gitlabviz
+
+      - name: Test with simple.gitlab-ci.yml
+        run: ./bin/gitlabviz show examples/simple.gitlab-ci.yml
+
+      - name: Test with complex.gitlab-ci.yml
+        run: ./bin/gitlabviz show examples/complex.gitlab-ci.yml
+
+      - name: Test JSON format
+        run: ./bin/gitlabviz show --format json examples/simple.gitlab-ci.yml
+
+      - name: Test YAML format
+        run: ./bin/gitlabviz show --format yaml examples/simple.gitlab-ci.yml
+
+      - name: Test table format
+        run: ./bin/gitlabviz show --format table examples/simple.gitlab-ci.yml
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.18'
+          cache: true
+
+      - name: Build
+        run: make build
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gitlabviz-linux
+          path: bin/gitlabviz
+          retention-days: 7
+
+  build-all:
+    name: Build All Platforms
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.18'
+          cache: true
+
+      - name: Build all platforms
+        run: make build-all
+
+      - name: Upload all build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: gitlabviz-all-platforms
+          path: bin/
+          retention-days: 7
