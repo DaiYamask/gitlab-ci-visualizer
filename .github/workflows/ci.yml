@@ -77,11 +77,10 @@ jobs:
         run: make build
 
       - name: Upload Linux build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: gitlabviz-linux
           path: bin/gitlabviz
-          retention-days: 7
 
   build-all:
     name: Build All Platforms
@@ -100,8 +99,7 @@ jobs:
         run: make build-all
 
       - name: Upload all build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: gitlabviz-all-platforms
           path: bin/
-          retention-days: 7
