@@ -11,6 +11,7 @@ A command-line tool to visualize GitLab CI pipelines, with a focus on showing wh
 - Display workflow rules
 - Color-coded output for better readability
 - Multiple output formats (text, JSON, YAML, table)
+- Environment variable expansion with support for GitLab CI variables
 
 ## Installation
 
@@ -59,6 +60,12 @@ gitlabviz show --no-color path/to/.gitlab-ci.yml
 gitlabviz show --format json path/to/.gitlab-ci.yml
 gitlabviz show --format yaml path/to/.gitlab-ci.yml
 gitlabviz show --format table path/to/.gitlab-ci.yml
+
+# Expand environment variables
+gitlabviz show --expand-vars path/to/.gitlab-ci.yml
+
+# Provide values for CI variables
+gitlabviz show --expand-vars --ci-vars CI_COMMIT_BRANCH=main,CI_PIPELINE_SOURCE=push path/to/.gitlab-ci.yml
 
 # Get help
 gitlabviz --help
@@ -142,6 +149,36 @@ Jobs by Rules:
 Filters applied:
   Stage: test
   Rule: $CI_COMMIT_TAG
+```
+
+### With Environment Variables Expanded
+
+```
+GitLab CI Pipeline Visualization
+===============================
+
+Stages:
+  1. build
+  2. test
+  3. deploy
+
+Jobs by Rules:
+
+  Rule Condition: <CI_COMMIT_BRANCH> == "main"
+    - build (build)
+      Rule 1: if: <CI_COMMIT_BRANCH> == "main", when: always
+      Rule 2: if: <CI_PIPELINE_SOURCE> == "merge_request_event", when: always
+    - test:unit (test)
+      Script:
+        - echo "Running tests with APP_VERSION=1.2.3"
+        - make test
+
+FILTERS APPLIED:
+---------------
+expand-vars: true
+
+NOTE: Environment variables have been expanded.
+CI_ variables without provided values are shown as <VARIABLE_NAME>.
 ```
 
 ## Development
