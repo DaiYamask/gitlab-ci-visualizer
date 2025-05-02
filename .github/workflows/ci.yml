@@ -69,6 +69,21 @@ jobs:
         
       - name: Test dependencies with table format
         run: ./bin/gitlabviz show --dependencies --format table examples/complex.gitlab-ci.yml
+        
+      - name: Test expand-vars flag
+        run: ./bin/gitlabviz show --expand-vars examples/variables.gitlab-ci.yml
+        
+      - name: Test expand-vars with JSON format
+        run: ./bin/gitlabviz show --expand-vars --format json examples/variables.gitlab-ci.yml
+        
+      - name: Test expand-vars with YAML format
+        run: ./bin/gitlabviz show --expand-vars --format yaml examples/variables.gitlab-ci.yml
+        
+      - name: Test expand-vars with table format
+        run: ./bin/gitlabviz show --expand-vars --format table examples/variables.gitlab-ci.yml
+        
+      - name: Test expand-vars with CI variables
+        run: ./bin/gitlabviz show --expand-vars --ci-vars CI_COMMIT_BRANCH=main,CI_PIPELINE_SOURCE=push examples/variables.gitlab-ci.yml
 
   build:
     name: Build
