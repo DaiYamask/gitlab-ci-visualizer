@@ -18,6 +18,7 @@ type Job struct {
 	When        string
 	AllowFailure bool
 	Dependencies []string
+	Needs        []string
 	Tags        []string
 }
 
@@ -142,15 +143,15 @@ func ParseFile(filePath string) (*Pipeline, error) {
 					if needsSlice, ok := needsInterface.([]interface{}); ok {
 						for _, need := range needsSlice {
 							if needStr, ok := need.(string); ok {
-								job.Dependencies = append(job.Dependencies, needStr)
+								job.Needs = append(job.Needs, needStr)
 							} else if needMap, ok := need.(map[string]interface{}); ok {
 								if jobName, ok := needMap["job"].(string); ok {
-									job.Dependencies = append(job.Dependencies, jobName)
+									job.Needs = append(job.Needs, jobName)
 								}
 							}
 						}
 					} else if needStr, ok := needsInterface.(string); ok {
-						job.Dependencies = append(job.Dependencies, needStr)
+						job.Needs = append(job.Needs, needStr)
 					}
 				}
 
