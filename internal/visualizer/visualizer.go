@@ -23,9 +23,10 @@ const (
 )
 
 type Options struct {
-	StageFilter string       // Filter jobs by stage
-	RuleFilter  string       // Filter jobs by rule condition
-	Format      OutputFormat // Output format (text, json, yaml, table)
+	StageFilter      string       // Filter jobs by stage
+	RuleFilter       string       // Filter jobs by rule condition
+	Format           OutputFormat // Output format (text, json, yaml, table)
+	ShowDependencies bool         // Show job dependencies
 }
 
 type PipelineOutput struct {
@@ -37,9 +38,11 @@ type PipelineOutput struct {
 }
 
 type JobOutput struct {
-	Name  string      `json:"name" yaml:"name"`
-	Stage string      `json:"stage" yaml:"stage"`
-	Rules []RuleOutput `json:"rules,omitempty" yaml:"rules,omitempty"`
+	Name         string      `json:"name" yaml:"name"`
+	Stage        string      `json:"stage" yaml:"stage"`
+	Rules        []RuleOutput `json:"rules,omitempty" yaml:"rules,omitempty"`
+	Dependencies []string    `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
+	Needs        []string    `json:"needs,omitempty" yaml:"needs,omitempty"`
 }
 
 type RuleOutput struct {
@@ -148,6 +151,9 @@ func Visualize(pipeline *parser.Pipeline, opts Options) {
 	if opts.RuleFilter != "" {
 		filters["rule"] = opts.RuleFilter
 	}
+	if opts.ShowDependencies {
+		filters["dependencies"] = "true"
+	}
 	
 	switch opts.Format {
 	case FormatJSON:
@@ -190,15 +196,35 @@ func outputYAML(pipeline *parser.Pipeline, workflowRules []map[string]string, jo
 func outputTable(pipeline *parser.Pipeline, workflowRules []map[string]string, jobsWithoutRules []*parser.Job, jobsByCondition map[string][]*parser.Job, filters map[string]string) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	
-	fmt.Fprintln(w, "JOB NAME\tSTAGE\tRULE CONDITION\tWHEN")
-	fmt.Fprintln(w, "--------\t-----\t--------------\t----")
+	if filters["dependencies"] != "" {
+		fmt.Fprintln(w, "JOB NAME\tSTAGE\tRULE CONDITION\tWHEN\tNEEDS\tDEPENDENCIES")
+		fmt.Fprintln(w, "--------\t-----\t--------------\t----\t-----\t------------")
+	} else {
+		fmt.Fprintln(w, "JOB NAME\tSTAGE\tRULE CONDITION\tWHEN")
+		fmt.Fprintln(w, "--------\t-----\t--------------\t----")
+	}
 	
 	for _, job := range jobsWithoutRules {
 		stage := job.Stage
 		if stage == "" {
 			stage = "test"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, "No Rules", "always")
+		
+		if filters["dependencies"] != "" {
+			needs := "none"
+			if len(job.Needs) > 0 {
+				needs = strings.Join(job.Needs, ", ")
+			}
+			
+			deps := "none"
+			if len(job.Dependencies) > 0 {
+				deps = strings.Join(job.Dependencies, ", ")
+			}
+			
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", job.Name, stage, "No Rules", "always", needs, deps)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, "No Rules", "always")
+		}
 	}
 	
 	for condition, jobs := range jobsByCondition {
@@ -213,7 +239,21 @@ func outputTable(pipeline *parser.Pipeline, workflowRules []map[string]string, j
 				when = job.Rules[0].When
 			}
 			
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, condition, when)
+			if filters["dependencies"] != "" {
+				needs := "none"
+				if len(job.Needs) > 0 {
+					needs = strings.Join(job.Needs, ", ")
+				}
+				
+				deps := "none"
+				if len(job.Dependencies) > 0 {
+					deps = strings.Join(job.Dependencies, ", ")
+				}
+				
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", job.Name, stage, condition, when, needs, deps)
+			} else {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", job.Name, stage, condition, when)
+			}
 		}
 	}
 	
@@ -296,6 +336,9 @@ func outputText(pipeline *parser.Pipeline, workflowRules []map[string]string, jo
 		if ruleFilter, ok := filters["rule"]; ok {
 			fmt.Printf("  Rule: %s\n", color.YellowString(ruleFilter))
 		}
+		if _, ok := filters["dependencies"]; ok {
+			fmt.Printf("  Dependencies: %s\n", color.YellowString("true"))
+		}
 	}
 }
 
@@ -336,9 +379,11 @@ func convertJobToOutput(job *parser.Job) JobOutput {
 	}
 	
 	jobOutput := JobOutput{
-		Name:  job.Name,
-		Stage: stage,
-		Rules: []RuleOutput{},
+		Name:         job.Name,
+		Stage:        stage,
+		Rules:        []RuleOutput{},
+		Dependencies: job.Dependencies,
+		Needs:        job.Needs,
 	}
 	
 	for _, rule := range job.Rules {
@@ -391,5 +436,13 @@ func printJob(job *parser.Job) {
 			
 			fmt.Println(strings.Join(parts, ", "))
 		}
+	}
+	
+	if len(job.Needs) > 0 {
+		fmt.Printf("      Needs: %s\n", color.YellowString(strings.Join(job.Needs, ", ")))
+	}
+	
+	if len(job.Dependencies) > 0 {
+		fmt.Printf("      Dependencies: %s\n", color.CyanString(strings.Join(job.Dependencies, ", ")))
 	}
 }

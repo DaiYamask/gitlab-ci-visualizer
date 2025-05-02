@@ -13,10 +13,11 @@ import (
 var (
 	Version = "0.1.0"
 	
-	noColor    bool
-	stageFlag  string
-	ruleFlag   string
-	formatFlag string
+	noColor          bool
+	stageFlag        string
+	ruleFlag         string
+	formatFlag       string
+	dependenciesFlag bool
 )
 
 func main() {
@@ -31,7 +32,9 @@ Examples:
   gitlabviz show .gitlab-ci.yml
   gitlabviz show --no-color path/to/.gitlab-ci.yml
   gitlabviz show --stage test path/to/.gitlab-ci.yml
-  gitlabviz show --rule '$CI_COMMIT_BRANCH == "main"' path/to/.gitlab-ci.yml`,
+  gitlabviz show --rule '$CI_COMMIT_BRANCH == "main"' path/to/.gitlab-ci.yml
+  gitlabviz show --dependencies path/to/.gitlab-ci.yml
+  gitlabviz show --dependencies --format table path/to/.gitlab-ci.yml`,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if noColor {
 				color.NoColor = true
@@ -72,9 +75,10 @@ Examples:
 			}
 			
 			opts := visualizer.Options{
-				StageFilter: stageFlag,
-				RuleFilter:  ruleFlag,
-				Format:      format,
+				StageFilter:      stageFlag,
+				RuleFilter:       ruleFlag,
+				Format:           format,
+				ShowDependencies: dependenciesFlag,
 			}
 			
 			visualizer.Visualize(pipeline, opts)
@@ -84,6 +88,7 @@ Examples:
 	showCmd.Flags().StringVar(&stageFlag, "stage", "", "Filter jobs by stage")
 	showCmd.Flags().StringVar(&ruleFlag, "rule", "", "Filter jobs by rule condition")
 	showCmd.Flags().StringVar(&formatFlag, "format", "text", "Output format (text, json, yaml, table)")
+	showCmd.Flags().BoolVar(&dependenciesFlag, "dependencies", false, "Show job dependencies")
 
 	rootCmd.AddCommand(showCmd)
 
