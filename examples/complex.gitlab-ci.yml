@@ -36,6 +36,8 @@ prepare:env:
 build:app:
   stage: build
   extends: .base_job
+  needs:
+    - prepare:env
   script:
     - echo "Building application"
     - make build
@@ -50,6 +52,8 @@ build:app:
 build:docker:
   stage: build
   extends: .base_job
+  needs:
+    - prepare:env
   script:
     - echo "Building Docker image"
     - docker build -t $DOCKER_IMAGE .
@@ -63,6 +67,8 @@ build:docker:
 test:unit:
   stage: test
   extends: .base_job
+  needs:
+    - build:app
   script:
     - echo "Running unit tests"
     - make test-unit
@@ -77,6 +83,10 @@ test:unit:
 test:integration:
   stage: test
   extends: .base_job
+  needs:
+    - build:app
+  dependencies:
+    - build:app
   script:
     - echo "Running integration tests"
     - make test-integration
@@ -90,6 +100,11 @@ test:integration:
 test:e2e:
   stage: test
   extends: .base_job
+  needs:
+    - build:app
+    - build:docker
+  dependencies:
+    - build:app
   script:
     - echo "Running end-to-end tests"
     - make test-e2e
@@ -103,6 +118,12 @@ test:e2e:
 deploy:staging:
   stage: deploy
   extends: .base_job
+  needs:
+    - test:unit
+    - test:integration
+  dependencies:
+    - build:app
+    - build:docker
   environment:
     name: staging
     url: https://staging.example.com
@@ -117,6 +138,13 @@ deploy:staging:
 deploy:production:
   stage: deploy
   extends: .base_job
+  needs:
+    - test:unit
+    - test:integration
+    - test:e2e
+  dependencies:
+    - build:app
+    - build:docker
   environment:
     name: production
     url: https://example.com
@@ -131,6 +159,9 @@ deploy:production:
 cleanup:
   stage: cleanup
   extends: .base_job
+  needs:
+    - deploy:staging
+  dependencies: []
   script:
     - echo "Cleaning up resources"
     - make cleanup
