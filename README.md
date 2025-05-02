@@ -54,6 +54,12 @@ gitlabviz show --stage test --rule '$CI_COMMIT_TAG' path/to/.gitlab-ci.yml
 # Disable colored output
 gitlabviz show --no-color path/to/.gitlab-ci.yml
 
+# Generate SVG image
+gitlabviz show --output-image pipeline.svg path/to/.gitlab-ci.yml
+
+# Customize image dimensions
+gitlabviz show --output-image pipeline.svg --width 1200 --height 800 path/to/.gitlab-ci.yml
+
 # Get help
 gitlabviz --help
 gitlabviz show --help

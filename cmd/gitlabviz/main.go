@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DaiYamask/gitlab-ci-visualizer/internal/image"
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
 	"github.com/fatih/color"
@@ -13,9 +14,13 @@ import (
 var (
 	Version = "0.1.0"
 	
-	noColor   bool
-	stageFlag string
-	ruleFlag  string
+	noColor     bool
+	stageFlag   string
+	ruleFlag    string
+	outputImage string
+	imageFormat string
+	imageWidth  int
+	imageHeight int
 )
 
 func main() {
@@ -64,11 +69,31 @@ Examples:
 			}
 			
 			visualizer.Visualize(pipeline, opts)
+			
+			if outputImage != "" {
+				imgOpts := image.Options{
+					OutputPath: outputImage,
+					Format:     imageFormat,
+					Width:      imageWidth,
+					Height:     imageHeight,
+				}
+				
+				if err := image.GeneratePipelineImage(pipeline, imgOpts); err != nil {
+					fmt.Printf("Error generating image: %v\n", err)
+					os.Exit(1)
+				}
+				
+				fmt.Printf("\nImage saved to: %s\n", outputImage)
+			}
 		},
 	}
 	
 	showCmd.Flags().StringVar(&stageFlag, "stage", "", "Filter jobs by stage")
 	showCmd.Flags().StringVar(&ruleFlag, "rule", "", "Filter jobs by rule condition")
+	showCmd.Flags().StringVar(&outputImage, "output-image", "", "Output visualization to an image file")
+	showCmd.Flags().StringVar(&imageFormat, "format", "svg", "Image format (svg only for now)")
+	showCmd.Flags().IntVar(&imageWidth, "width", 800, "Image width in pixels")
+	showCmd.Flags().IntVar(&imageHeight, "height", 600, "Image height in pixels")
 
 	rootCmd.AddCommand(showCmd)
 
