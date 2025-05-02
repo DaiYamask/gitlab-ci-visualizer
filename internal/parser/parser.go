@@ -127,6 +127,32 @@ func ParseFile(filePath string) (*Pipeline, error) {
 						job.Script = append(job.Script, scriptStr)
 					}
 				}
+				
+				if depsInterface, ok := jobMap["dependencies"]; ok {
+					if depsSlice, ok := depsInterface.([]interface{}); ok {
+						for _, dep := range depsSlice {
+							if depStr, ok := dep.(string); ok {
+								job.Dependencies = append(job.Dependencies, depStr)
+							}
+						}
+					}
+				}
+				
+				if needsInterface, ok := jobMap["needs"]; ok {
+					if needsSlice, ok := needsInterface.([]interface{}); ok {
+						for _, need := range needsSlice {
+							if needStr, ok := need.(string); ok {
+								job.Dependencies = append(job.Dependencies, needStr)
+							} else if needMap, ok := need.(map[string]interface{}); ok {
+								if jobName, ok := needMap["job"].(string); ok {
+									job.Dependencies = append(job.Dependencies, jobName)
+								}
+							}
+						}
+					} else if needStr, ok := needsInterface.(string); ok {
+						job.Dependencies = append(job.Dependencies, needStr)
+					}
+				}
 
 				if rulesInterface, ok := jobMap["rules"]; ok {
 					if rulesSlice, ok := rulesInterface.([]interface{}); ok {
