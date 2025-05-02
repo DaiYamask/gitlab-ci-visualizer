@@ -1,0 +1,16 @@
+# Stages definition
+
+stages:
+  - prepare
+  - build
+  - test
+  - deploy
+  - cleanup
+
+prepare:
+  stage: prepare
+  script:
+    - echo "Preparing environment"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always

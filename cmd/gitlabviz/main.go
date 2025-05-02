@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/parser"
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
@@ -90,10 +91,66 @@ Examples:
 	showCmd.Flags().StringVar(&formatFlag, "format", "text", "Output format (text, json, yaml, table)")
 	showCmd.Flags().BoolVar(&dependenciesFlag, "dependencies", false, "Show job dependencies")
 
+	var templateCmd = &cobra.Command{
+		Use:   "template [file]",
+		Short: "Show included templates in GitLab CI pipeline",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			filePath := args[0]
+			
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				fmt.Printf("Error: File '%s' does not exist\n", filePath)
+				os.Exit(1)
+			}
+			
+			pipeline, err := parser.ParseFile(filePath)
+			if err != nil {
+				fmt.Printf("Error parsing file: %v\n", err)
+				os.Exit(1)
+			}
+			
+			err = parser.LoadIncludedTemplates(pipeline)
+			if err != nil {
+				fmt.Printf("Error loading templates: %v\n", err)
+				os.Exit(1)
+			}
+			
+			fmt.Println("GitLab CI Template Hierarchy")
+			fmt.Println("============================")
+			fmt.Println()
+			fmt.Print(parser.DisplayTemplateHierarchy(pipeline, "", nil))
+			fmt.Println()
+			
+			fmt.Println("Template Contents")
+			fmt.Println("=================")
+			fmt.Println()
+			
+			displayTemplateContents(pipeline, 0)
+		},
+	}
+	
 	rootCmd.AddCommand(showCmd)
+	rootCmd.AddCommand(templateCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+}
+
+func displayTemplateContents(pipeline *parser.Pipeline, level int) {
+	if pipeline == nil {
+		return
+	}
+	
+	for _, include := range pipeline.Includes {
+		fmt.Printf("Template: %s (%s)\n", include.Path, include.Type)
+		fmt.Println(strings.Repeat("-", len("Template: "+include.Path+" ("+include.Type+")")))
+		fmt.Println(include.Content)
+		fmt.Println()
+		
+		if include.Pipeline != nil {
+			displayTemplateContents(include.Pipeline, level+1)
+		}
 	}
 }

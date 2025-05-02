@@ -37,16 +37,31 @@ type OnlyExcept struct {
 	Kubernetes bool
 }
 
+type Include struct {
+	Type     string // local, file, remote, template, project
+	Path     string
+	Project  string
+	Ref      string
+	File     string
+	Content  string
+	Pipeline *Pipeline
+}
+
 type Pipeline struct {
 	Jobs       map[string]*Job
 	Stages     []string
 	Variables  map[string]string
 	Workflow   map[string]interface{}
 	Default    map[string]interface{}
-	Includes   []string
+	Includes   []*Include
+	FilePath   string
 }
 
 func ParseFile(filePath string) (*Pipeline, error) {
+	return ParseFileWithIncludes(filePath, true)
+}
+
+func ParseFileWithIncludes(filePath string, processIncludes bool) (*Pipeline, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -66,6 +81,7 @@ func ParseFile(filePath string) (*Pipeline, error) {
 	pipeline := &Pipeline{
 		Jobs:      make(map[string]*Job),
 		Variables: make(map[string]string),
+		FilePath:  filePath,
 	}
 
 	if stagesInterface, ok := data["stages"]; ok {
@@ -97,6 +113,48 @@ func ParseFile(filePath string) (*Pipeline, error) {
 	if defaultInterface, ok := data["default"]; ok {
 		if defaultMap, ok := defaultInterface.(map[string]interface{}); ok {
 			pipeline.Default = defaultMap
+		}
+	}
+	
+	if processIncludes {
+		if includesInterface, ok := data["include"]; ok {
+			if includeMap, ok := includesInterface.(map[string]interface{}); ok {
+				include := processIncludeMap(includeMap, filePath)
+				pipeline.Includes = append(pipeline.Includes, include)
+			}
+			
+			if includesSlice, ok := includesInterface.([]interface{}); ok {
+				for _, includeInterface := range includesSlice {
+					if includeStr, ok := includeInterface.(string); ok {
+						include := &Include{
+							Type: "local",
+							Path: includeStr,
+						}
+						pipeline.Includes = append(pipeline.Includes, include)
+					}
+					
+					if includeMap, ok := includeInterface.(map[string]interface{}); ok {
+						include := processIncludeMap(includeMap, filePath)
+						pipeline.Includes = append(pipeline.Includes, include)
+					}
+				}
+			}
+			
+			for _, include := range pipeline.Includes {
+				if include.Type == "local" {
+					includePath := include.Path
+					if !isAbsolutePath(includePath) {
+						dir := getDirectoryPath(filePath)
+						includePath = dir + "/" + includePath
+					}
+					
+					includedPipeline, err := ParseFileWithIncludes(includePath, true)
+					if err == nil {
+						include.Content = getFileContent(includePath)
+						include.Pipeline = includedPipeline
+					}
+				}
+			}
 		}
 	}
 

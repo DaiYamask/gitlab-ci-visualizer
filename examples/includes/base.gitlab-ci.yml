@@ -1,0 +1,12 @@
+# Base GitLab CI configuration
+
+.base_job:
+  image: alpine:latest
+  tags:
+    - docker
+  before_script:
+    - echo "Running base job setup"
+
+default:
+  timeout: 1h
+  interruptible: true

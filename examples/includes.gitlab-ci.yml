@@ -1,0 +1,33 @@
+# Main GitLab CI file with includes
+
+include:
+  # Local include
+  - local: 'includes/base.gitlab-ci.yml'
+  
+  # Multiple includes in array format
+  - local: 'includes/stages.gitlab-ci.yml'
+  - local: 'includes/variables.gitlab-ci.yml'
+  
+  # Project include (would require GitLab API access)
+  - project: 'group/project'
+    ref: 'main'
+    file: '.gitlab-ci.yml'
+  
+  # Template include (would require GitLab API access)
+  - template: 'Auto-DevOps.gitlab-ci.yml'
+
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  MAIN_VAR: "main-value"
+
+build:app:
+  stage: build
+  script:
+    - echo "Building app"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
