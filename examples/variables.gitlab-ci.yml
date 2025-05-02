@@ -1,0 +1,70 @@
+# Example GitLab CI file with variables for testing expansion
+
+variables:
+  APP_VERSION: "1.2.3"
+  APP_NAME: "my-app"
+  BASE_IMAGE: "alpine:3.14"
+  TEST_TIMEOUT: "30m"
+  DEPLOY_ENV: "${CI_COMMIT_REF_NAME}"
+
+stages:
+  - build
+  - test
+  - deploy
+
+.base_job:
+  image: ${BASE_IMAGE}
+  tags:
+    - docker
+
+build:
+  stage: build
+  extends: .base_job
+  script:
+    - echo "Building ${APP_NAME} version ${APP_VERSION}"
+    - echo "Using base image ${BASE_IMAGE}"
+    - make build VERSION=${APP_VERSION}
+  variables:
+    BUILD_TYPE: "release"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+
+test:unit:
+  stage: test
+  extends: .base_job
+  script:
+    - echo "Running unit tests for ${APP_NAME}"
+    - make test-unit TIMEOUT=${TEST_TIMEOUT}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+
+test:integration:
+  stage: test
+  extends: .base_job
+  script:
+    - echo "Running integration tests for ${APP_NAME} in ${CI_ENVIRONMENT_NAME}"
+    - make test-integration TIMEOUT=${TEST_TIMEOUT}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /integration-tests/
+      when: always
+    - when: never
+
+deploy:staging:
+  stage: deploy
+  extends: .base_job
+  environment:
+    name: staging
+    url: https://${APP_NAME}-staging.example.com
+  script:
+    - echo "Deploying ${APP_NAME} version ${APP_VERSION} to ${DEPLOY_ENV}"
+    - make deploy ENV=${DEPLOY_ENV}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - when: never
