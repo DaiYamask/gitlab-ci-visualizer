@@ -69,6 +69,9 @@ jobs:
         
       - name: Test dependencies with table format
         run: ./bin/gitlabviz show --dependencies --format table examples/complex.gitlab-ci.yml
+        
+      - name: Test template command
+        run: ./bin/gitlabviz template examples/includes.gitlab-ci.yml
 
   build:
     name: Build
