@@ -13,9 +13,10 @@ import (
 var (
 	Version = "0.1.0"
 	
-	noColor   bool
-	stageFlag string
-	ruleFlag  string
+	noColor    bool
+	stageFlag  string
+	ruleFlag   string
+	formatFlag string
 )
 
 func main() {
@@ -58,9 +59,22 @@ Examples:
 				os.Exit(1)
 			}
 			
+			var format visualizer.OutputFormat
+			switch formatFlag {
+			case "json":
+				format = visualizer.FormatJSON
+			case "yaml":
+				format = visualizer.FormatYAML
+			case "table":
+				format = visualizer.FormatTable
+			default:
+				format = visualizer.FormatText
+			}
+			
 			opts := visualizer.Options{
 				StageFilter: stageFlag,
 				RuleFilter:  ruleFlag,
+				Format:      format,
 			}
 			
 			visualizer.Visualize(pipeline, opts)
@@ -69,6 +83,7 @@ Examples:
 	
 	showCmd.Flags().StringVar(&stageFlag, "stage", "", "Filter jobs by stage")
 	showCmd.Flags().StringVar(&ruleFlag, "rule", "", "Filter jobs by rule condition")
+	showCmd.Flags().StringVar(&formatFlag, "format", "text", "Output format (text, json, yaml, table)")
 
 	rootCmd.AddCommand(showCmd)
 
