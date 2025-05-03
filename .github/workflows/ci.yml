@@ -72,6 +72,15 @@ jobs:
         
       - name: Test template command
         run: ./bin/gitlabviz template examples/includes.gitlab-ci.yml
+        
+      - name: Test template command with JSON format
+        run: ./bin/gitlabviz template --format json examples/includes.gitlab-ci.yml
+        
+      - name: Test template command with YAML format
+        run: ./bin/gitlabviz template --format yaml examples/includes.gitlab-ci.yml
+        
+      - name: Test template command with table format
+        run: ./bin/gitlabviz template --format table examples/includes.gitlab-ci.yml
 
   build:
     name: Build

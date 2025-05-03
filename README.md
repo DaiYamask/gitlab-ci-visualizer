@@ -11,6 +11,7 @@ A command-line tool to visualize GitLab CI pipelines, with a focus on showing wh
 - Display workflow rules
 - Color-coded output for better readability
 - Multiple output formats (text, JSON, YAML, table)
+- View included templates and their contents
 
 ## Installation
 
@@ -60,12 +61,55 @@ gitlabviz show --format json path/to/.gitlab-ci.yml
 gitlabviz show --format yaml path/to/.gitlab-ci.yml
 gitlabviz show --format table path/to/.gitlab-ci.yml
 
+# View included templates in a GitLab CI pipeline
+gitlabviz template path/to/.gitlab-ci.yml
+
+# View templates in different formats
+gitlabviz template --format json path/to/.gitlab-ci.yml
+gitlabviz template --format yaml path/to/.gitlab-ci.yml
+gitlabviz template --format table path/to/.gitlab-ci.yml
+
 # Get help
 gitlabviz --help
 gitlabviz show --help
+gitlabviz template --help
 ```
 
 ## Example Output
+
+### Template Command Output
+
+```
+GitLab CI Template Hierarchy
+============================
+
+└── includes.gitlab-ci.yml
+    └── local: includes/base.gitlab-ci.yml
+    └── local: includes/stages.gitlab-ci.yml
+    └── local: includes/variables.gitlab-ci.yml
+    └── project: .gitlab-ci.yml (project: group/project, ref: main, file: .gitlab-ci.yml)
+    └── template: Auto-DevOps.gitlab-ci.yml
+
+Template Contents
+=================
+
+Template: includes/base.gitlab-ci.yml (local)
+---------------------------------------------
+# Base GitLab CI configuration
+
+.base_job:
+  image: alpine:latest
+  tags:
+    - docker
+  before_script:
+    - echo "Running base job setup"
+
+default:
+  timeout: 1h
+  interruptible: true
+
+...
+```
 
 ### Basic Visualization
 

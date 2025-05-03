@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -19,6 +21,7 @@ var (
 	ruleFlag         string
 	formatFlag       string
 	dependenciesFlag bool
+	templateFormatFlag string
 )
 
 func main() {
@@ -115,19 +118,30 @@ Examples:
 				os.Exit(1)
 			}
 			
-			fmt.Println("GitLab CI Template Hierarchy")
-			fmt.Println("============================")
-			fmt.Println()
-			fmt.Print(parser.DisplayTemplateHierarchy(pipeline, "", nil))
-			fmt.Println()
-			
-			fmt.Println("Template Contents")
-			fmt.Println("=================")
-			fmt.Println()
-			
-			displayTemplateContents(pipeline, 0)
+			switch templateFormatFlag {
+			case "json":
+				displayTemplateJSON(pipeline)
+			case "yaml":
+				displayTemplateYAML(pipeline)
+			case "table":
+				displayTemplateTable(pipeline)
+			default:
+				fmt.Println("GitLab CI Template Hierarchy")
+				fmt.Println("============================")
+				fmt.Println()
+				fmt.Print(parser.DisplayTemplateHierarchy(pipeline, "", nil))
+				fmt.Println()
+				
+				fmt.Println("Template Contents")
+				fmt.Println("=================")
+				fmt.Println()
+				
+				displayTemplateContents(pipeline, 0)
+			}
 		},
 	}
+	
+	templateCmd.Flags().StringVar(&templateFormatFlag, "format", "text", "Output format (text, json, yaml, table)")
 	
 	rootCmd.AddCommand(showCmd)
 	rootCmd.AddCommand(templateCmd)
@@ -151,6 +165,92 @@ func displayTemplateContents(pipeline *parser.Pipeline, level int) {
 		
 		if include.Pipeline != nil {
 			displayTemplateContents(include.Pipeline, level+1)
+		}
+	}
+}
+
+type TemplateInfo struct {
+	Path     string            `json:"path" yaml:"path"`
+	Type     string            `json:"type" yaml:"type"`
+	Content  string            `json:"content" yaml:"content"`
+	Includes []TemplateInfo    `json:"includes,omitempty" yaml:"includes,omitempty"`
+}
+
+func buildTemplateInfoTree(pipeline *parser.Pipeline) []TemplateInfo {
+	if pipeline == nil || len(pipeline.Includes) == 0 {
+		return nil
+	}
+	
+	result := []TemplateInfo{}
+	
+	for _, include := range pipeline.Includes {
+		info := TemplateInfo{
+			Path:    include.Path,
+			Type:    include.Type,
+			Content: include.Content,
+		}
+		
+		if include.Pipeline != nil {
+			info.Includes = buildTemplateInfoTree(include.Pipeline)
+		}
+		
+		result = append(result, info)
+	}
+	
+	return result
+}
+
+func displayTemplateJSON(pipeline *parser.Pipeline) {
+	rootInfo := TemplateInfo{
+		Path:     pipeline.FilePath,
+		Type:     "root",
+		Content:  "",
+		Includes: buildTemplateInfoTree(pipeline),
+	}
+	
+	jsonData, err := json.MarshalIndent(rootInfo, "", "  ")
+	if err != nil {
+		fmt.Printf("Error generating JSON: %v\n", err)
+		return
+	}
+	
+	fmt.Println(string(jsonData))
+}
+
+func displayTemplateYAML(pipeline *parser.Pipeline) {
+	rootInfo := TemplateInfo{
+		Path:     pipeline.FilePath,
+		Type:     "root",
+		Content:  "",
+		Includes: buildTemplateInfoTree(pipeline),
+	}
+	
+	yamlData, err := yaml.Marshal(rootInfo)
+	if err != nil {
+		fmt.Printf("Error generating YAML: %v\n", err)
+		return
+	}
+	
+	fmt.Println(string(yamlData))
+}
+
+func displayTemplateTable(pipeline *parser.Pipeline) {
+	fmt.Println("| Template Path | Type | Included From |")
+	fmt.Println("|--------------|------|---------------|")
+	
+	displayTemplateTableRows(pipeline, "")
+}
+
+func displayTemplateTableRows(pipeline *parser.Pipeline, parent string) {
+	if pipeline == nil {
+		return
+	}
+	
+	for _, include := range pipeline.Includes {
+		fmt.Printf("| %s | %s | %s |\n", include.Path, include.Type, parent)
+		
+		if include.Pipeline != nil {
+			displayTemplateTableRows(include.Pipeline, include.Path)
 		}
 	}
 }
