@@ -8,17 +8,65 @@ import (
 	"github.com/DaiYamask/gitlab-ci-visualizer/internal/visualizer"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3" // Added for template command
 )
 
 var (
 	Version = "0.1.0"
-	
+
 	noColor          bool
 	stageFlag        string
 	ruleFlag         string
 	formatFlag       string
 	dependenciesFlag bool
 )
+
+var templateCmd = &cobra.Command{
+	Use:   "template [file]",
+	Short: "Show fully resolved GitLab CI configuration as YAML, including all includes.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return fmt.Errorf("file '%s' does not exist", filePath)
+		}
+
+		// Initialize visited map for the first call to ParseFile
+		visited := make(map[string]bool)
+		pipeline, err := parser.ParseFile(filePath, visited)
+		if err != nil {
+			return fmt.Errorf("error parsing file: %w", err)
+		}
+
+		outputMap := make(map[string]interface{})
+
+		if pipeline.Default != nil {
+			outputMap["default"] = pipeline.Default
+		}
+		if len(pipeline.Variables) > 0 { // Check if map is not empty
+			outputMap["variables"] = pipeline.Variables
+		}
+		if pipeline.Workflow != nil {
+			outputMap["workflow"] = pipeline.Workflow
+		}
+		if len(pipeline.Stages) > 0 { // Check if slice is not empty
+			outputMap["stages"] = pipeline.Stages
+		}
+
+		for jobName, job := range pipeline.Jobs {
+			outputMap[jobName] = job
+		}
+
+		yamlData, err := yaml.Marshal(outputMap)
+		if err != nil {
+			return fmt.Errorf("error marshalling to YAML: %w", err)
+		}
+
+		cmd.OutOrStdout().Write(yamlData)
+		return nil
+	},
+}
 
 func main() {
 	var rootCmd = &cobra.Command{
@@ -91,6 +139,7 @@ Examples:
 	showCmd.Flags().BoolVar(&dependenciesFlag, "dependencies", false, "Show job dependencies")
 
 	rootCmd.AddCommand(showCmd)
+	rootCmd.AddCommand(templateCmd) // Register templateCmd
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

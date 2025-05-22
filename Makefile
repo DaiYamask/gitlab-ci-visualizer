@@ -39,6 +39,11 @@ test:
 	@echo "Running tests..."
 	@go test -v ./...
 
+# Run template command specific tests
+test-template:
+	@echo "Running template command tests..."
+	@go test -v ./cmd/gitlabviz/... -run ^TestTemplateCommand_
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning..."

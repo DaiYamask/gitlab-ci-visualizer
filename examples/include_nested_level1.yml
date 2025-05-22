@@ -1,0 +1,3 @@
+include: 'include_nested_level2.yml'
+level1_job:
+  script: echo "Level 1 job"

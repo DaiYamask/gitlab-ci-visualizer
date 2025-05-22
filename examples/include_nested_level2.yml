@@ -1,0 +1,2 @@
+level2_job:
+  script: echo "Level 2 job"

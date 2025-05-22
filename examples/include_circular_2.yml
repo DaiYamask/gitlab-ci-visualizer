@@ -1,0 +1,3 @@
+include: 'include_circular_1.yml'
+job2:
+  script: echo job2

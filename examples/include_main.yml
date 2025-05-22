@@ -1,0 +1,18 @@
+include: 'include_base.yml'
+
+variables:
+  MAIN_VAR: "main_value"
+  BASE_VAR: "overridden_base_value" # To test variable override
+
+stages:
+  - test # New stage
+  - build # Existing stage
+
+main_job:
+  stage: test
+  script:
+    - echo "Main job"
+
+base_job: # To test job override (main takes precedence)
+  script:
+    - echo "Overridden base job script in main"

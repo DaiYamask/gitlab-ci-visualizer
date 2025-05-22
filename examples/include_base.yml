@@ -1,0 +1,9 @@
+variables:
+  BASE_VAR: "base_value"
+stages:
+  - build
+  - deploy
+base_job:
+  stage: build
+  script:
+    - echo "Base job"
